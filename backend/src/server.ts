@@ -3,6 +3,8 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import { connectDB } from "./config/db.js";
+import { errorHandler } from "./middleware/errorHandler.js";
+import { notFound } from "./middleware/notFound.js";
 const app = express();
 const PORT = Number(process.env.PORT ?? 4000);
 
@@ -24,16 +26,8 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-app.use((_req, res) => {
-  res.status(404).json({
-    success: false,
-    error: {
-      code: "NOT_FOUND",
-      message: "The requested endpoint was not found",
-    },
-  });
-});
-
+app.use(notFound);
+app.use(errorHandler);
 
 async function startServer() {
   try {
