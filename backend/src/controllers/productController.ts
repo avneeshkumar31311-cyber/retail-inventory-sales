@@ -1,5 +1,10 @@
 import type { RequestHandler } from "express";
-import { createProduct, listProducts } from "../services/productService.js";
+import {
+  createProduct,
+  listProducts,
+  updateProduct,
+  deleteProduct,
+} from "../services/productService.js";
 import { sendSuccess } from "../utils/apiResponse.js";
 
 export const createProductController: RequestHandler = async (
@@ -58,4 +63,65 @@ sendSuccess(res, 200, {
 } catch (error) {
 next(error);
 }
+};
+
+
+export const updateProductController: RequestHandler = async (
+  req,
+  res,
+  next,
+) => {
+  try {
+    const productId = req.params.id;
+
+if (typeof productId !== "string" || !productId) {
+  res.status(400).json({
+    success: false,
+    error: {
+      code: "INVALID_PRODUCT_ID",
+      message: "A valid product ID is required",
+    },
+  });
+  return;
+}
+
+const product = await updateProduct(productId, req.body);
+
+    sendSuccess(res, 200, {
+      message: "Product updated successfully",
+      data: product,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteProductController: RequestHandler = async (
+  req,
+  res,
+  next,
+) => {
+  try {
+    const productId = req.params.id;
+
+    if (typeof productId !== "string" || !productId) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: "INVALID_PRODUCT_ID",
+          message: "A valid product ID is required",
+        },
+      });
+      return;
+    }
+
+    await deleteProduct(productId);
+
+    sendSuccess(res, 200, {
+      message: "Product deleted successfully",
+      data: null,
+    });
+  } catch (error) {
+    next(error);
+  }
 };
