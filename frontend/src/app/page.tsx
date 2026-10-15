@@ -1,69 +1,263 @@
-import Image from "next/image";
 
-export default function Home() {
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { api, type Sale } from "../lib/api";
+
+function money(value: number) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+export default function DashboardPage() {
+  const [summary, setSummary] = useState({
+    totalRevenue: 0,
+    totalSales: 0,
+    totalUnitsSold: 0,
+  });
+
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [lowStockCount, setLowStockCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function loadDashboard() {
+      try {
+        setError("");
+
+        const [summaryResult, salesResult, productsResult] =
+          await Promise.all([
+            api.getSalesSummary(),
+            api.getSales(1, 5),
+            api.getProducts(),
+          ]);
+
+        setSummary(summaryResult);
+        setSales(salesResult.sales);
+
+        
+setLowStockCount(
+  productsResult.products.filter(
+    (product) =>
+      product.quantity <= product.lowStockThreshold,
+  ).length,
+);
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Unable to load dashboard data.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void loadDashboard();
+  }, []);
+
+  const stats = [
+    {
+      label: "Total Revenue",
+      value: money(summary.totalRevenue),
+      icon: "₹",
+    },
+    {
+      label: "Total Sales",
+      value: summary.totalSales.toLocaleString("en-IN"),
+      icon: "↗",
+    },
+    {
+      label: "Units Sold",
+      value: summary.totalUnitsSold.toLocaleString("en-IN"),
+      icon: "▤",
+    },
+    {
+      label: "Low Stock Items",
+      value: lowStockCount.toLocaleString("en-IN"),
+      icon: "!",
+    },
+  ];
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <>
+      <div className="page-heading">
+        <div>
+          <h1>Dashboard</h1>
+          <p>Here&apos;s what&apos;s happening with your store.</p>
+        </div>
+        <Link className="primary-button" href="/sales/new">
+          + Create Sale
+        </Link>
+      </div>
+
+      {error && (
+        <div className="error-message" role="alert">
+          {error}
+          <p>
+            Check that your backend is running at{" "}
+            <code>localhost:4000</code> and the API response has the
+            expected format.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      )}
+
+      <section className="stats-grid">
+        {stats.map((stat, index) => (
+          <article className="stat-card" key={stat.label}>
+            <div>
+              <p className="stat-label">{stat.label}</p>
+              <p className="stat-value">
+                {loading ? "—" : stat.value}
+              </p>
+              <p className={`stat-note${index === 3 ? " danger" : ""}`}>
+                {[
+                  "Across recorded sales",
+                  "Recorded transactions",
+                  "Across all sales",
+                  "At or below stock threshold",
+                ][index]}
+              </p>
+            </div>
+            <span
+              className={`stat-icon ${index === 1 ? "blue" : ""} ${
+                index === 3 ? "red" : ""
+              }`}
+            >
+              {stat.icon}
+            </span>
+          </article>
+        ))}
+      </section>
+
+      <section className="dashboard-grid">
+        <div className="stack">
+          <article className="panel">
+            <div className="panel-header">
+              <div>
+                <h2>Sales Overview</h2>
+                <p>Sales performance</p>
+              </div>
+              <Link className="text-link" href="/reports">
+                View reports →
+              </Link>
+            </div>
+
+            <div className="chart-placeholder">
+              {[35, 52, 40, 68, 83, 72, 91].map((height, index) => (
+                <div className="chart-column" key={index}>
+                  <div
+                    className="chart-bar"
+                    style={{ height: `${height}%` }}
+                  />
+                  <span>
+                    {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][index]}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="stat-note">
+              Illustrative chart — daily revenue reporting is not yet
+              available from the backend.
+            </p>
+          </article>
+
+          <article className="table-panel">
+            <div
+              className="panel-header"
+              style={{ padding: "20px 20px 0" }}
+            >
+              <div>
+                <h2>Recent Sales</h2>
+                <p>Latest recorded transactions</p>
+              </div>
+              <Link className="text-link" href="/sales">
+                View all →
+              </Link>
+            </div>
+
+            {loading ? (
+              <div className="empty-state">Loading sales...</div>
+            ) : sales.length === 0 ? (
+              <div className="empty-state">
+                No sales recorded yet.
+              </div>
+            ) : (
+              <div className="table-scroll">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Sale ID</th>
+                      <th>Date &amp; Time</th>
+                      <th>Items</th>
+                      <th>Amount</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sales.map((sale) => (
+                      <tr key={sale._id}>
+                        <td>#{sale._id.slice(-6).toUpperCase()}</td>
+                        <td>
+                          {new Date(sale.createdAt).toLocaleString()}
+                        </td>
+                        <td>{sale.items.length}</td>
+                        <td>{money(sale.totalAmount)}</td>
+                        <td>
+                          <Link
+                            className="text-link"
+                            href={`/sales?id=${encodeURIComponent(sale._id)}`}
+                          >
+                            View
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </article>
         </div>
-      </main>
-    </div>
+
+        <aside className="panel">
+          <div className="panel-header">
+            <div>
+              <h2>Inventory Alerts</h2>
+              <p>Products needing attention</p>
+            </div>
+            <span className="badge danger">{lowStockCount}</span>
+          </div>
+
+          {loading ? (
+            <p className="muted">Checking inventory...</p>
+          ) : lowStockCount > 0 ? (
+            <p>
+              {lowStockCount} product(s) are at or below their low-stock
+              threshold.
+            </p>
+          ) : (
+            <p className="muted">
+              No products currently meet the low-stock alert condition.
+            </p>
+          )}
+
+          <Link className="primary-button full-width" href="/products">
+            Manage Products
+          </Link>
+
+          <div style={{ marginTop: 12 }}>
+            <Link className="secondary-button full-width" href="/sales/new">
+              Start a Sale
+            </Link>
+          </div>
+        </aside>
+      </section>
+    </>
   );
 }
