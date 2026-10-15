@@ -11,6 +11,11 @@ interface CreateSaleInput {
   }[];
 }
 
+interface GetSalesOptions {
+  page: number;
+  limit: number;
+}
+
 export async function createSale(input: CreateSaleInput) {
   const session = await mongoose.startSession();
 
@@ -70,7 +75,9 @@ export async function createSale(input: CreateSaleInput) {
           (product.price * item.quantity).toFixed(2),
         );
 
-        totalAmount = Number((totalAmount + subtotal).toFixed(2));
+        totalAmount = Number(
+          (totalAmount + subtotal).toFixed(2),
+        );
 
         saleItems.push({
           product: product._id,
@@ -99,4 +106,76 @@ export async function createSale(input: CreateSaleInput) {
   } finally {
     await session.endSession();
   }
+}
+
+export async function getSales({
+  page,
+  limit,
+}: GetSalesOptions) {
+  const skip = (page - 1) * limit;
+
+  const [sales, total] = await Promise.all([
+    Sale.find()
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    Sale.countDocuments(),
+  ]);
+
+  return {
+    sales,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+}
+
+export async function getSaleById(id: string) {
+  if (!Types.ObjectId.isValid(id)) {
+    throw new AppError(
+      "Invalid sale ID",
+      400,
+      "INVALID_SALE_ID",
+    );
+  }
+
+  const sale = await Sale.findById(id).lean();
+
+  if (!sale) {
+    throw new AppError(
+      "Sale not found",
+      404,
+      "SALE_NOT_FOUND",
+    );
+  }
+
+  return sale;
+}
+
+
+export async function getSalesSummary() {
+  const [result] = await Sale.aggregate([
+    {
+      $group: {
+        _id: null,
+        totalRevenue: { $sum: "$totalAmount" },
+        totalSales: { $sum: 1 },
+        totalUnitsSold: {
+          $sum: {
+            $sum: "$items.quantity",
+          },
+        },
+      },
+    },
+  ]);
+
+  return {
+    totalRevenue: result?.totalRevenue ?? 0,
+    totalSales: result?.totalSales ?? 0,
+    totalUnitsSold: result?.totalUnitsSold ?? 0,
+  };
 }
