@@ -1,5 +1,16 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { api } from "../lib/api";
 
 export default function Topbar() {
+  const router = useRouter();
+
+  function handleLogout() {
+    api.logout();
+    router.replace("/login");
+  }
+
   return (
     <header className="topbar">
       <div className="global-search">
@@ -12,11 +23,12 @@ export default function Topbar() {
       </div>
 
       <div className="topbar-actions">
-        <button className="icon-button" type="button" aria-label="Notifications">
-          ♧
-        </button>
-        <button className="profile-button" type="button" aria-label="User profile">
-          A
+        <button
+          className="secondary-button"
+          type="button"
+          onClick={handleLogout}
+        >
+          Log out
         </button>
       </div>
     </header>

@@ -34,7 +34,7 @@ export default function DashboardPage() {
           await Promise.all([
             api.getSalesSummary(),
             api.getSales(1, 5),
-            api.getProducts(),
+            api.getAllProducts(),
           ]);
 
         setSummary(summaryResult);
@@ -42,7 +42,7 @@ export default function DashboardPage() {
 
         
 setLowStockCount(
-  productsResult.products.filter(
+  productsResult.filter(
     (product) =>
       product.quantity <= product.lowStockThreshold,
   ).length,

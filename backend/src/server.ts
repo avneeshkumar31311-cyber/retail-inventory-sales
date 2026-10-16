@@ -9,6 +9,8 @@ import { errorHandler } from "./middleware/errorHandler.js";
 import { notFound } from "./middleware/notFound.js";
 import productRoutes from "./routes/productRoutes.js";
 import saleRoutes from "./routes/saleRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
+import { getJwtSecret } from "./config/jwt.js";
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 4000);
@@ -31,6 +33,7 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/sales", saleRoutes);
 
@@ -39,6 +42,7 @@ app.use(errorHandler);
 
 async function startServer() {
   try {
+    getJwtSecret();
     await connectDB();
 
     app.listen(PORT, () => {
