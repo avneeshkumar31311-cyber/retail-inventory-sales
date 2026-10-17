@@ -42,7 +42,7 @@ router.put(
   updateProductController,
 );
 
-// Only Admin can delete products.
+// Only Admin can deactivate products.
 router.delete(
   "/:id",
   authenticate,

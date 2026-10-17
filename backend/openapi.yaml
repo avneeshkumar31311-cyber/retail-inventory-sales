@@ -1,0 +1,605 @@
+openapi: 3.0.3
+info:
+  title: RetailSync Inventory and Sales API
+  version: 1.0.0
+  description: >
+    API for authenticated retail inventory management, product administration,
+    sales, invoices, stock movements, and date-range reporting.
+servers:
+  - url: http://{host}:{port}
+    description: Local development server
+    variables:
+      host:
+        default: localhost
+      port:
+        default: '4000'
+tags:
+  - name: Health
+    description: Service status and availability checks.
+  - name: Authentication
+    description: Login, current-user information, and user administration.
+  - name: Products
+    description: Product catalogue management, pricing, and activation status.
+  - name: Sales
+    description: Sales transactions, invoices, and lifetime summaries.
+  - name: Inventory
+    description: Low-stock queries, inventory history, and stock adjustments.
+  - name: Reports
+    description: Date-range sales, top-selling products, and profit reporting.
+paths:
+  /api/health:
+    get:
+      operationId: getApiHealth
+      tags: [Health]
+      summary: Check API health
+      security: []
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '200':
+          description: API is running
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/auth/login:
+    post:
+      operationId: login
+      tags: [Authentication]
+      summary: Log in and obtain a JWT access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginInput'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/me:
+    get:
+      operationId: getCurrentUser
+      tags: [Authentication]
+      summary: Get the current authenticated user
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current user
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/auth/users:
+    post:
+      operationId: createUser
+      tags: [Authentication]
+      summary: Create a user account
+      description: Admin-only user creation.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserInput'
+      responses:
+        '201':
+          description: User created
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/products:
+    get:
+      operationId: listProducts
+      tags: [Products]
+      summary: List products
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '200':
+          description: Paginated products
+    post:
+      operationId: createProduct
+      tags: [Products]
+      summary: Create a product
+      description: Admin only. The legacy price field can be used by older clients; price and sellingPrice must agree if both are supplied.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductInput'
+      responses:
+        '201':
+          description: Product created
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/products/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+    put:
+      operationId: updateProduct
+      tags: [Products]
+      summary: Update product details or active status
+      description: Admin only.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductUpdateInput'
+      responses:
+        '200':
+          description: Product updated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      operationId: deactivateProduct
+      tags: [Products]
+      summary: Deactivate a product
+      description: Admin only. This marks a product inactive instead of permanently deleting its record.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Product deactivated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/sales:
+    get:
+      operationId: listSales
+      tags: [Sales]
+      summary: List sales
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '200':
+          description: Paginated sales and invoice details
+    post:
+      operationId: createSale
+      tags: [Sales]
+      summary: Create a sale and invoice
+      description: >
+        The backend verifies active status and available stock, calculates
+        discount and tax, generates an invoice number, and writes sale and
+        inventory movement records in a database transaction.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSaleInput'
+      responses:
+        '201':
+          description: Sale and invoice created
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Insufficient stock or inactive product
+
+  /api/sales/summary:
+    get:
+      operationId: getSalesSummary
+      tags: [Sales]
+      summary: Get lifetime sales summary
+      security:
+        - BearerAuth: []
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '200':
+          description: Lifetime revenue, number of sales, and units sold
+
+  /api/sales/{id}:
+    get:
+      operationId: getSaleById
+      tags: [Sales]
+      summary: Get a sale and its invoice details
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      responses:
+        '200':
+          description: Sale details
+        '404':
+          description: Sale not found
+
+  /api/inventory/low-stock:
+    get:
+      operationId: listLowStockProducts
+      tags: [Inventory]
+      summary: List active products at or below their stock threshold
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '200':
+          description: Paginated low-stock products
+
+  /api/inventory/movements:
+    get:
+      operationId: listInventoryMovements
+      tags: [Inventory]
+      summary: List inventory movements
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: product
+          in: query
+          required: false
+          description: Filter by product ID
+          schema:
+            type: string
+            pattern: '^[a-fA-F0-9]{24}$'
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '200':
+          description: Paginated movement history
+
+  /api/inventory/adjustments:
+    post:
+      operationId: createInventoryAdjustment
+      tags: [Inventory]
+      summary: Manually adjust product stock
+      description: Admin only. A negative adjustment cannot reduce stock below zero.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InventoryAdjustmentInput'
+      responses:
+        '201':
+          description: Adjustment and movement record created
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Stock changed or insufficient stock
+
+  /api/reports/sales:
+    get:
+      operationId: getSalesDateReport
+      tags: [Reports]
+      summary: Get sales totals for a date range
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '200':
+          description: Sales, discount, tax, collected revenue, and average order value
+
+  /api/reports/top-products:
+    get:
+      operationId: getTopSellingProducts
+      tags: [Reports]
+      summary: Get top-selling products for a date range
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '200':
+          description: Products ranked by units sold
+
+  /api/reports/profit:
+    get:
+      operationId: getProfitDateReport
+      tags: [Reports]
+      summary: Get gross profit reporting for a date range
+      description: Profit completeness is false when sale items do not have recorded purchase costs. Historical costs are not inferred.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FromDate'
+        - $ref: '#/components/parameters/ToDate'
+      responses:
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '200':
+          description: Net sales, known cost of goods, known gross profit, and missing-cost coverage
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 10
+    FromDate:
+      name: from
+      in: query
+      required: false
+      description: Inclusive UTC calendar date in YYYY-MM-DD format
+      schema:
+        type: string
+        format: date
+    ToDate:
+      name: to
+      in: query
+      required: false
+      description: Inclusive UTC calendar date in YYYY-MM-DD format
+      schema:
+        type: string
+        format: date
+  responses:
+    Unauthorized:
+      description: Missing or invalid authentication token
+    Forbidden:
+      description: Authenticated user lacks the required role
+    BadRequest:
+      description: Invalid request data
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+            tokenType:
+              type: string
+              enum: [Bearer]
+            expiresIn:
+              type: integer
+            user:
+              $ref: '#/components/schemas/User'
+    CreateUserInput:
+      type: object
+      required: [name, email, password, role]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+        role:
+          type: string
+          enum: [Admin, Staff]
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [Admin, Staff]
+    ProductInput:
+      type: object
+      required: [name, sku, quantity]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 50
+        category:
+          type: string
+          default: Uncategorized
+        price:
+          type: number
+          minimum: 0.01
+          description: Legacy selling price; keep equal to sellingPrice if both are supplied.
+        purchasePrice:
+          type: number
+          minimum: 0
+        sellingPrice:
+          type: number
+          minimum: 0.01
+        quantity:
+          type: integer
+          minimum: 0
+        lowStockThreshold:
+          type: integer
+          minimum: 0
+          default: 5
+    ProductUpdateInput:
+      type: object
+      description: Partial product update. Supply only the fields to change.
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 100
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 50
+        category:
+          type: string
+          minLength: 2
+          maxLength: 50
+        price:
+          type: number
+          minimum: 0.01
+        purchasePrice:
+          type: number
+          minimum: 0
+        sellingPrice:
+          type: number
+          minimum: 0.01
+        quantity:
+          type: integer
+          minimum: 0
+        lowStockThreshold:
+          type: integer
+          minimum: 0
+        isActive:
+          type: boolean
+    CreateSaleInput:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [product, quantity]
+            properties:
+              product:
+                type: string
+                pattern: '^[a-fA-F0-9]{24}$'
+              quantity:
+                type: integer
+                minimum: 1
+        discountPercent:
+          type: number
+          minimum: 0
+          maximum: 100
+          default: 0
+        taxPercent:
+          type: number
+          minimum: 0
+          maximum: 100
+          default: 0
+    InventoryAdjustmentInput:
+      type: object
+      required: [product, quantityChange, reason]
+      properties:
+        product:
+          type: string
+          pattern: '^[a-fA-F0-9]{24}$'
+        quantityChange:
+          type: integer
+          minimum: -1000000
+          maximum: 1000000
+          not:
+            enum: [0]
+          description: Positive values add stock; negative values remove stock.
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 250

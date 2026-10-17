@@ -19,4 +19,12 @@ export const createSaleSchema = z.object({
         new Set(items.map((item) => item.product)).size === items.length,
       { message: "Each product may appear only once per sale" },
     ),
+  discountPercent: z.number()
+    .min(0, { message: "Discount cannot be negative" })
+    .max(100, { message: "Discount cannot exceed 100%" })
+    .optional(),
+  taxPercent: z.number()
+    .min(0, { message: "Tax cannot be negative" })
+    .max(100, { message: "Tax cannot exceed 100%" })
+    .optional(),
 });

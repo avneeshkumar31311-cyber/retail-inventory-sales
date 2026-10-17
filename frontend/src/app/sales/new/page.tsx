@@ -21,6 +21,8 @@ export default function CreateSalePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState<Sale | null>(null);
+  const [discountPercent, setDiscountPercent] = useState("0");
+  const [taxPercent, setTaxPercent] = useState("0");
 
   const loadProducts = useCallback(async () => {
     try {
@@ -56,9 +58,28 @@ export default function CreateSalePage() {
     };
   }, []);
 
-  const availableProducts = products.filter((product) => product.quantity > 0);
-  const cartTotal = useMemo(() => cart.reduce((sum, line) => sum + line.product.price * line.quantity, 0), [cart]);
-  const unitsInCart = useMemo(() => cart.reduce((sum, line) => sum + line.quantity, 0), [cart]);
+  const availableProducts = products.filter((product) => product.isActive !== false && product.quantity > 0);
+  const cartSubtotal = useMemo(
+    () => Number(cart.reduce(
+      (sum, line) => sum + (line.product.sellingPrice ?? line.product.price) * line.quantity,
+      0,
+    ).toFixed(2)),
+    [cart],
+  );
+  const safeDiscountPercent = Number.isFinite(Number(discountPercent))
+    ? Math.min(100, Math.max(0, Number(discountPercent)))
+    : 0;
+  const safeTaxPercent = Number.isFinite(Number(taxPercent))
+    ? Math.min(100, Math.max(0, Number(taxPercent)))
+    : 0;
+  const cartDiscount = Number((cartSubtotal * safeDiscountPercent / 100).toFixed(2));
+  const discountedSubtotal = Number((cartSubtotal - cartDiscount).toFixed(2));
+  const cartTax = Number((discountedSubtotal * safeTaxPercent / 100).toFixed(2));
+  const cartTotal = Number((discountedSubtotal + cartTax).toFixed(2));
+  const unitsInCart = useMemo(
+    () => cart.reduce((sum, line) => sum + line.quantity, 0),
+    [cart],
+  );
 
   function addSelectedProduct() {
     setError("");
@@ -92,12 +113,37 @@ export default function CreateSalePage() {
   async function submitSale() {
     setError("");
     setSuccess(null);
-    if (cart.length === 0) { setError("Add at least one product before completing the sale."); return; }
+    if (cart.length === 0) {
+      setError("Add at least one product before completing the sale.");
+      return;
+    }
+
+    const parsedDiscount = Number(discountPercent);
+    const parsedTax = Number(taxPercent);
+
+    if (!discountPercent.trim() || !Number.isFinite(parsedDiscount) || parsedDiscount < 0 || parsedDiscount > 100) {
+      setError("Discount must be between 0% and 100%.");
+      return;
+    }
+    if (!taxPercent.trim() || !Number.isFinite(parsedTax) || parsedTax < 0 || parsedTax > 100) {
+      setError("Tax must be between 0% and 100%.");
+      return;
+    }
+
     setSaving(true);
     try {
-      const sale = await api.createSale({ items: cart.map((line) => ({ product: line.product._id, quantity: line.quantity })) });
+      const sale = await api.createSale({
+        items: cart.map((line) => ({
+          product: line.product._id,
+          quantity: line.quantity,
+        })),
+        discountPercent: parsedDiscount,
+        taxPercent: parsedTax,
+      });
       setSuccess(sale);
       setCart([]);
+      setDiscountPercent("0");
+      setTaxPercent("0");
       setLoading(true);
       await loadProducts();
     } catch (err) {
@@ -120,20 +166,71 @@ export default function CreateSalePage() {
     <>
       <div className="page-heading"><div><h1>Create Sale</h1><p>Select in-stock products, adjust quantities, and complete a transaction.</p></div><Link className="secondary-button" href="/sales">Sales History →</Link></div>
       {error && <div className="error-message" role="alert">{error}</div>}
-      {success && <div className="success-message" role="status"><strong>Sale completed successfully.</strong> Sale #{success._id.slice(-6).toUpperCase()} — {money(success.totalAmount)}. Stock was updated by the backend. <div className="page-actions"><Link className="text-link" href="/sales">View sales history →</Link><button className="secondary-button" type="button" onClick={() => setSuccess(null)}>Create another sale</button></div></div>}
+      {success && (
+        <div className="success-message invoice-print-area" role="status">
+          <strong>Sale completed successfully.</strong>
+          <p>
+            Invoice: <strong>{success.invoiceNumber ?? `Sale #${success._id.slice(-6).toUpperCase()}`}</strong>
+          </p>
+          {success.subtotal !== undefined && (
+            <>
+              <div className="summary-line">
+                <span>Subtotal</span>
+                <strong>{money(success.subtotal)}</strong>
+              </div>
+              <div className="summary-line">
+                <span>Discount ({success.discountPercent ?? 0}%)</span>
+                <strong>−{money(success.discountAmount ?? 0)}</strong>
+              </div>
+              <div className="summary-line">
+                <span>Tax ({success.taxPercent ?? 0}%)</span>
+                <strong>{money(success.taxAmount ?? 0)}</strong>
+              </div>
+            </>
+          )}
+          <div className="summary-line summary-total">
+            <span>Invoice total</span>
+            <strong>{money(success.totalAmount)}</strong>
+          </div>
+          <div className="table-scroll invoice-items">
+            <table className="data-table compact-table">
+              <thead>
+                <tr><th>Product</th><th>SKU</th><th>Qty</th><th>Unit price</th><th>Amount</th></tr>
+              </thead>
+              <tbody>
+                {success.items.map((item, index) => (
+                  <tr key={`${success._id}-${item.product}-${index}`}>
+                    <td>{item.productName}</td>
+                    <td>{item.sku}</td>
+                    <td>{item.quantity}</td>
+                    <td>{money(item.unitPrice)}</td>
+                    <td>{money(item.subtotal)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p>Stock was updated by the backend and the invoice was recorded.</p>
+          <div className="page-actions">
+            <Link className="text-link" href="/sales">View sales history →</Link>
+            <button className="secondary-button" type="button" onClick={() => window.print()}>Print Invoice</button>
+            <button className="secondary-button" type="button" onClick={() => setSuccess(null)}>Create another sale</button>
+          </div>
+        </div>
+      )}
 
       <section className="sale-layout">
         <article className="panel">
-          <div className="panel-header"><div><h2>Products</h2><p>Only products with available stock can be added.</p></div></div>
-          {loading ? <div className="empty-state">Loading products...</div> : products.length === 0 ? <div className="empty-state">No products found. Add products before creating a sale.</div> : availableProducts.length === 0 ? <div className="empty-state">All products are currently out of stock.</div> : (
-            <div className="product-picker"><label className="form-field" htmlFor="sale-product-select"><span>Choose product</span><select className="form-input" id="sale-product-select" value={selectedProductId} onChange={(event) => setSelectedProductId(event.target.value)} disabled={saving}><option value="">Select a product…</option>{availableProducts.map((product) => <option key={product._id} value={product._id}>{product.name} ({product.sku}) — {money(product.price)} · {product.quantity} in stock</option>)}</select></label><button className="primary-button" type="button" onClick={addSelectedProduct} disabled={saving || !selectedProductId}>Add to cart</button></div>
+          <div className="panel-header"><div><h2>Products</h2><p>Only active products with available stock can be added.</p></div></div>
+          {loading ? <div className="empty-state">Loading products...</div> : products.length === 0 ? <div className="empty-state">No products found. Add products before creating a sale.</div> : availableProducts.length === 0 ? <div className="empty-state">No active products with available stock. Activate a product or add stock before creating a sale.</div> : (
+            <div className="product-picker"><label className="form-field" htmlFor="sale-product-select"><span>Choose product</span><select className="form-input" id="sale-product-select" value={selectedProductId} onChange={(event) => setSelectedProductId(event.target.value)} disabled={saving}><option value="">Select a product…</option>{availableProducts.map((product) => <option key={product._id} value={product._id}>{product.name} ({product.sku}) — {money(product.sellingPrice ?? product.price)} · {product.quantity} in stock</option>)}</select></label><button className="primary-button" type="button" onClick={addSelectedProduct} disabled={saving || !selectedProductId}>Add to cart</button></div>
           )}
           <div className="cart-list">
             {cart.length === 0 ? <div className="empty-state">Your cart is empty.</div> : cart.map((line) => (
               <div className="cart-row" key={line.product._id}>
-                <div><strong>{line.product.name}</strong><div className="product-sku">{line.product.sku} · {money(line.product.price)} each · {line.product.quantity} in stock</div></div>
+                <div><strong>{line.product.name}</strong><div className="product-sku">{line.product.sku} · {money(line.product.sellingPrice ?? line.product.price)} each · {line.product.quantity} in stock</div></div>
                 <div className="quantity-control"><button type="button" aria-label={`Decrease ${line.product.name} quantity`} onClick={() => line.quantity <= 1 ? removeFromCart(line.product._id) : setQuantity(line.product._id, line.quantity - 1)} disabled={saving}>−</button><span aria-label="Quantity">{line.quantity}</span><button type="button" aria-label={`Increase ${line.product.name} quantity`} onClick={() => setQuantity(line.product._id, line.quantity + 1)} disabled={saving || line.quantity >= line.product.quantity}>+</button></div>
-                <strong>{money(line.product.price * line.quantity)}</strong>
+                <strong>{money((line.product.sellingPrice ?? line.product.price) * line.quantity)}</strong>
                 <button className="text-button danger-text" type="button" onClick={() => removeFromCart(line.product._id)} disabled={saving}>Remove</button>
               </div>
             ))}
@@ -141,10 +238,43 @@ export default function CreateSalePage() {
         </article>
 
         <aside className="panel">
-          <div className="panel-header"><div><h2>Sale Summary</h2><p>Totals are calculated from current product prices.</p></div></div>
+          <div className="panel-header"><div><h2>Invoice Summary</h2><p>Server-side totals are authoritative at checkout.</p></div></div>
+          <div className="form-grid">
+            <div className="form-field">
+              <label htmlFor="sale-discount">Discount (%)</label>
+              <input
+                className="form-input"
+                id="sale-discount"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={discountPercent}
+                onChange={(event) => setDiscountPercent(event.target.value)}
+                disabled={saving}
+              />
+            </div>
+            <div className="form-field">
+              <label htmlFor="sale-tax">Tax (%)</label>
+              <input
+                className="form-input"
+                id="sale-tax"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={taxPercent}
+                onChange={(event) => setTaxPercent(event.target.value)}
+                disabled={saving}
+              />
+            </div>
+          </div>
           <div className="summary-line"><span>Unique products</span><strong>{cart.length}</strong></div>
           <div className="summary-line"><span>Total units</span><strong>{unitsInCart}</strong></div>
-          <div className="summary-line summary-total"><span>Total</span><strong>{money(cartTotal)}</strong></div>
+          <div className="summary-line"><span>Subtotal</span><strong>{money(cartSubtotal)}</strong></div>
+          <div className="summary-line"><span>Discount ({safeDiscountPercent}%)</span><strong>−{money(cartDiscount)}</strong></div>
+          <div className="summary-line"><span>Tax ({safeTaxPercent}%)</span><strong>{money(cartTax)}</strong></div>
+          <div className="summary-line summary-total"><span>Estimated total</span><strong>{money(cartTotal)}</strong></div>
           <p className="form-help">Prices and available quantities are verified by the backend during checkout. A sale will not complete if stock is insufficient.</p>
           <button className="primary-button full-width checkout-button" type="button" onClick={() => void submitSale()} disabled={saving || loading || cart.length === 0}>{saving ? "Completing sale…" : "Complete Sale"}</button>
           <Link className="secondary-button full-width back-button" href="/products">Manage Products</Link>

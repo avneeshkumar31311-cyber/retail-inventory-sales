@@ -1055,3 +1055,44 @@ button:disabled {
     padding: 22px;
   }
 }
+
+
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .invoice-print-area,
+  .invoice-print-area * {
+    visibility: visible !important;
+  }
+
+  .invoice-print-area {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 100% !important;
+    color: #111 !important;
+    background: #fff !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .invoice-print-area .page-actions,
+  .invoice-print-area button,
+  .invoice-print-area a {
+    display: none !important;
+  }
+
+  .invoice-print-area .table-scroll {
+    overflow: visible !important;
+  }
+
+  .invoice-print-area .data-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+}

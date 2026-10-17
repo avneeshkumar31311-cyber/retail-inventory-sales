@@ -73,13 +73,56 @@ export default function SalesHistoryPage() {
       <section className="table-panel">
         <div className="panel-header table-toolbar"><div><h2>Recorded Sales</h2><p>{loading ? "Loading sales…" : `${pagination.total} transaction(s) in total`}</p></div><span className="muted">Sorted newest first</span></div>
         {loading ? <div className="empty-state">Loading sales history…</div> : sales.length === 0 ? <div className="empty-state">No sales have been recorded yet. <div className="page-actions" style={{ justifyContent: "center" }}><Link className="primary-button" href="/sales/new">Create your first sale</Link></div></div> : (
-          <div className="table-scroll"><table className="data-table"><thead><tr><th>Sale</th><th>Date &amp; Time</th><th>Unique Items</th><th>Units</th><th>Total</th><th>Details</th></tr></thead><tbody>
+          <div className="table-scroll"><table className="data-table"><thead><tr><th>Invoice</th><th>Date &amp; Time</th><th>Unique Items</th><th>Units</th><th>Discount</th><th>Tax</th><th>Total</th><th>Details</th></tr></thead><tbody>
             {sales.map((sale) => {
               const totalUnits = sale.items.reduce((sum, item) => sum + item.quantity, 0);
               return <tr key={sale._id}>
-                <td><strong>#{sale._id.slice(-6).toUpperCase()}</strong><div className="product-sku">{sale._id}</div></td>
-                <td>{dateTime(sale.createdAt)}</td><td>{sale.items.length}</td><td>{totalUnits}</td><td><strong>{money(sale.totalAmount)}</strong></td>
-                <td><details className="sale-details"><summary>View items</summary><div className="sale-detail-popover"><table className="data-table compact-table"><thead><tr><th>Product</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr></thead><tbody>{sale.items.map((item, index) => <tr key={`${sale._id}-${item.product}-${index}`}><td><strong>{item.productName}</strong><div className="product-sku">{item.sku}</div></td><td>{item.quantity}</td><td>{money(item.unitPrice)}</td><td>{money(item.subtotal)}</td></tr>)}</tbody></table><div className="summary-line summary-total"><span>Sale total</span><strong>{money(sale.totalAmount)}</strong></div></div></details></td>
+                <td>
+                  <strong>{sale.invoiceNumber ?? `#${sale._id.slice(-6).toUpperCase()}`}</strong>
+                  <div className="product-sku">{sale.createdByName ?? sale._id}</div>
+                </td>
+                <td>{dateTime(sale.createdAt)}</td>
+                <td>{sale.items.length}</td>
+                <td>{totalUnits}</td>
+                <td>{money(sale.discountAmount ?? 0)}{sale.discountPercent ? ` (${sale.discountPercent}%)` : ""}</td>
+                <td>{money(sale.taxAmount ?? 0)}{sale.taxPercent ? ` (${sale.taxPercent}%)` : ""}</td>
+                <td><strong>{money(sale.totalAmount)}</strong></td>
+                <td><details className="sale-details"><summary>View items</summary><div className="sale-detail-popover">
+                  <table className="data-table compact-table">
+                    <thead><tr><th>Product</th><th>Qty</th><th>Unit Price</th><th>Subtotal</th></tr></thead>
+                    <tbody>
+                      {sale.items.map((item, index) => (
+                        <tr key={`${sale._id}-${item.product}-${index}`}>
+                          <td><strong>{item.productName}</strong><div className="product-sku">{item.sku}</div></td>
+                          <td>{item.quantity}</td>
+                          <td>{money(item.unitPrice)}</td>
+                          <td>{money(item.subtotal)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="summary-line">
+                    <span>Subtotal</span>
+                    <strong>{money(sale.subtotal ?? sale.items.reduce((sum, item) => sum + item.subtotal, 0))}</strong>
+                  </div>
+                  <div className="summary-line">
+                    <span>Discount ({sale.discountPercent ?? 0}%)</span>
+                    <strong>−{money(sale.discountAmount ?? 0)}</strong>
+                  </div>
+                  <div className="summary-line">
+                    <span>Tax ({sale.taxPercent ?? 0}%)</span>
+                    <strong>{money(sale.taxAmount ?? 0)}</strong>
+                  </div>
+                  <div className="summary-line summary-total">
+                    <span>Invoice total</span>
+                    <strong>{money(sale.totalAmount)}</strong>
+                  </div>
+                  {sale.createdByName && (
+                    <p className="form-help">
+                      Recorded by {sale.createdByName}{sale.createdByRole ? ` (${sale.createdByRole})` : ""}
+                    </p>
+                  )}
+                </div></details></td>
               </tr>;
             })}
           </tbody></table></div>

@@ -10,7 +10,17 @@ export const createSaleController: RequestHandler = async (
   next,
 ) => {
   try {
-    const sale = await createSale(req.body);
+    const actor = req.authUser;
+
+    if (!actor) {
+      throw new AppError("Authentication is required", 401, "UNAUTHORIZED");
+    }
+
+    const sale = await createSale(req.body, {
+      id: actor.id,
+      name: actor.name,
+      role: actor.role,
+    });
 
     sendSuccess(res, 201, {
       message: "Sale created successfully",

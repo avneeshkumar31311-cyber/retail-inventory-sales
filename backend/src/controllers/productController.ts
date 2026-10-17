@@ -118,7 +118,7 @@ export const deleteProductController: RequestHandler = async (
     await deleteProduct(productId);
 
     sendSuccess(res, 200, {
-      message: "Product deleted successfully",
+      message: "Product deactivated successfully",
       data: null,
     });
   } catch (error) {

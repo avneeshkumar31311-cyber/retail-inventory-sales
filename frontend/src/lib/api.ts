@@ -106,6 +106,10 @@ export interface Product {
   name: string;
   sku: string;
   price: number;
+  category?: string;
+  purchasePrice?: number;
+  sellingPrice?: number;
+  isActive?: boolean;
   quantity: number;
   lowStockThreshold: number;
   createdAt?: string;
@@ -116,6 +120,10 @@ export interface ProductInput {
   name: string;
   sku: string;
   price: number;
+  category?: string;
+  purchasePrice?: number;
+  sellingPrice?: number;
+  isActive?: boolean;
   quantity: number;
   lowStockThreshold: number;
 }
@@ -133,25 +141,128 @@ export interface SaleItem {
   sku: string;
   quantity: number;
   unitPrice: number;
+  unitCost?: number;
   subtotal: number;
 }
 
 export interface Sale {
   _id: string;
+  invoiceNumber?: string;
   items: SaleItem[];
+  subtotal?: number;
+  discountPercent?: number;
+  discountAmount?: number;
+  taxPercent?: number;
+  taxAmount?: number;
   totalAmount: number;
+  createdByName?: string;
+  createdByRole?: "Admin" | "Staff";
   createdAt: string;
   updatedAt: string;
 }
 
 export interface CreateSaleInput {
   items: Array<{ product: string; quantity: number }>;
+  discountPercent?: number;
+  taxPercent?: number;
 }
 
 export interface SalesSummary {
   totalRevenue: number;
   totalSales: number;
   totalUnitsSold: number;
+}
+
+export interface ReportDateRange {
+  from: string | null;
+  to: string | null;
+}
+
+export interface SalesDateReport {
+  dateRange: ReportDateRange;
+  totalSales: number;
+  totalUnitsSold: number;
+  grossSubtotal: number;
+  discountAmount: number;
+  netSales: number;
+  taxAmount: number;
+  totalCollected: number;
+  averageOrderValue: number;
+}
+
+export interface TopSellingProduct {
+  product: string;
+  productName: string;
+  sku: string;
+  unitsSold: number;
+  grossSales: number;
+  salesCount: number;
+}
+
+export interface TopSellingProductsReport {
+  dateRange: ReportDateRange;
+  products: TopSellingProduct[];
+}
+
+export interface ProfitProductReport {
+  product: string;
+  productName: string;
+  sku: string;
+  unitsSold: number;
+  unitsWithoutCost: number;
+  netSales: number;
+  costOfGoods: number;
+  grossProfitWithKnownCost: number;
+  profitComplete: boolean;
+}
+
+export interface ProfitDateReport {
+  dateRange: ReportDateRange;
+  totalSales: number;
+  totalUnits: number;
+  unitsWithoutCost: number;
+  netSales: number;
+  revenueWithKnownCost: number;
+  costOfGoods: number;
+  grossProfitWithKnownCost: number;
+  profitComplete: boolean;
+  products: ProfitProductReport[];
+}
+
+export interface InventoryMovement {
+  _id: string;
+  product: string;
+  productName: string;
+  sku: string;
+  type: "SALE" | "ADJUSTMENT_IN" | "ADJUSTMENT_OUT";
+  quantityChange: number;
+  quantityBefore: number;
+  quantityAfter: number;
+  reason: string;
+  referenceSale?: string;
+  invoiceNumber?: string;
+  unitCost?: number;
+  performedBy: string;
+  performedByName: string;
+  performedByRole: "Admin" | "Staff";
+  createdAt: string;
+  updatedAt: string;
+}
+
+function queryPath(
+  path: string,
+  params: Record<string, string | number | undefined>,
+): string {
+  const query = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") {
+      query.set(key, String(value));
+    }
+  }
+
+  const encoded = query.toString();
+  return encoded ? `${path}?${encoded}` : path;
 }
 
 export const api = {
@@ -218,7 +329,10 @@ export const api = {
       body: JSON.stringify(input),
     }),
 
-  updateProduct: (id: string, input: ProductInput) =>
+  updateProduct: (
+    id: string,
+    input: Partial<ProductInput> & { isActive?: boolean },
+  ) =>
     request<Product>(`/products/${encodeURIComponent(id)}`, {
       method: "PUT",
       body: JSON.stringify(input),
@@ -228,6 +342,41 @@ export const api = {
     request<null>(`/products/${encodeURIComponent(id)}`, {
       method: "DELETE",
     }),
+
+  getLowStockProducts: (page = 1, limit = 10) =>
+    request<{ products: Product[]; pagination: Pagination }>(
+      `/inventory/low-stock?page=${page}&limit=${limit}`,
+    ),
+
+  getInventoryMovements: (page = 1, limit = 10, product?: string) =>
+    request<{ movements: InventoryMovement[]; pagination: Pagination }>(
+      queryPath("/inventory/movements", { page, limit, product }),
+    ),
+
+  adjustInventory: (input: {
+    product: string;
+    quantityChange: number;
+    reason: string;
+  }) =>
+    request<{ product: Product; movement: InventoryMovement }>(
+      "/inventory/adjustments",
+      { method: "POST", body: JSON.stringify(input) },
+    ),
+
+  getSalesDateReport: (from?: string, to?: string) =>
+    request<SalesDateReport>(
+      queryPath("/reports/sales", { from, to }),
+    ),
+
+  getTopSellingProducts: (from?: string, to?: string, limit = 10) =>
+    request<TopSellingProductsReport>(
+      queryPath("/reports/top-products", { from, to, limit }),
+    ),
+
+  getProfitReport: (from?: string, to?: string) =>
+    request<ProfitDateReport>(
+      queryPath("/reports/profit", { from, to }),
+    ),
 
   createSale: (input: CreateSaleInput) =>
     request<Sale>("/sales", {

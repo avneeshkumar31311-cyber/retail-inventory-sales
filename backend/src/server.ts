@@ -10,6 +10,8 @@ import { notFound } from "./middleware/notFound.js";
 import productRoutes from "./routes/productRoutes.js";
 import saleRoutes from "./routes/saleRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
+import inventoryRoutes from "./routes/inventoryRoutes.js";
+import reportRoutes from "./routes/reportRoutes.js";
 import { getJwtSecret } from "./config/jwt.js";
 
 const app = express();
@@ -36,6 +38,8 @@ app.get("/api/health", (_req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/sales", saleRoutes);
+app.use("/api/inventory", inventoryRoutes);
+app.use("/api/reports", reportRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
